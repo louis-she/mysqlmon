@@ -33,7 +33,7 @@ def alert(msg, type):
     print msg
     log(msg)
 
-def do(func, params, repeat_times = 0, exit = True):
+def do(func, params, repeat_times = 0, exit = False):
     repeat_times += 1
     error = ""
     ret = ""
@@ -52,18 +52,33 @@ def do(func, params, repeat_times = 0, exit = True):
         else:
             type = "sms"
         alert(error, type)
-        if type == "sms" and exit == True:
-            sys.exit(0)
+        if type == "sms":
+            if exit == True:
+                sys.exit(0)
+            else:
+                return False
 
     return ret
 
 def check_process():
     pass
 
-def change_master_routine(change_info):
-    cursor = db.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute("change master to master_host='%s', master_user='repl', master_password='louispass', master_port=%s, master_log_file='%s', master_log_pos=%s;" % (change_info["master_host"], change_info["master_port"], change_info["master_logfile"], change_info["master_logpos"]))
+def slave_change_master(slavedb, master_host, master_port, master_logfile, master_logpos):
+    cursor = slavedb.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("stop slave;")
+    cursor.execute("change master to master_host='%s', master_user='repl', master_password='louispass', master_port=%s, master_log_file='%s', master_log_pos=%s;" % (master_host, master_port, master_logfile, master_logpos))
+    cursor.execute("start slave;")
     return True
+
+def slave_become_master(slavedb):
+    cursor = slavedb.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("stop slave;")
+    cursor.execute("reset master;")
+    cursor.execute("show master status;")
+    ret = cursor.fetchall()[0]
+    master_logfile = ret["File"]
+    master_logpos = ret["Position"]
+    return (master_logfile, master_logpos)
 
 def iosql_thread(slavedb):
     cursor = slavedb.cursor(MySQLdb.cursors.DictCursor)
@@ -87,9 +102,10 @@ def repl_delay(slavedb):
         raise Exception("sql delay")
     return exec_master_log_pos
 
-def same_logfile(db):
-    cursor = db.cursor(MySQLdb.cursors.DictCursor)
-    ret = cursor.execute("show slave status")[0]
+def same_logfile(slavedb):
+    cursor = slavedb.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("show slave status")
+    ret = cursor.fetchall()[0]
     master_log_file = ret["Master_Log_File"]
     relay_master_log_file = ret["Relay_Master_Log_File"]
     if master_log_file != relay_master_log_file:
@@ -99,33 +115,43 @@ def same_logfile(db):
 def log(msg):
     nowtime = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
     fh = open("./logfile", "a")
-    fh.write("[%s] %s" % (nowtime, msg))
+    fh.write("[%s] %s\n" % (nowtime, msg))
 
 def change_master(slaves):
-    changeinfo = {}
+    setmaster = False
+    curpos = 0
+
     for slave in slaves:
         # 1. connect to any slaves that belongs to the master
-        slavedb = do(connect, slave, 3, False)
+        slavedb = do(connect, slave, 3)
         if slavedb == False:
             continue
         # 2. check if it is the same logfile
-        logfile = do(same_logfile, slavedb, 3, False)
+        logfile = do(same_logfile, {"slavedb": slavedb}, 3)
         if logfile == False:
             continue
         # 3. check if it is relay, give it 5 chances to be synced
-        logpos  = do(repl_delay, slavedb, 5, False)
+        logpos  = do(repl_delay, {"slavedb": slavedb}, 5)
         if logpos == False:
             continue
         
-        if "logpos" not in changeinfo or toppos["logpos"] < logpos:
-            changeinfo = {
-                "master_host":     slave["host"],
-                "master_port":     slave["port"],
-                "master_logfile":  logfile,
-                "master_logpos" :  logpos,
-            }
+        if not setmaster or curpos < logpos:
+            setmaster = slave
+            curpos = logpos
 
-    change_master_routine(changeinfo)
+    bemasterdb = do(connect, setmaster, 3)
+    master_logfile, master_logpos = do(slave_become_master, {"slavedb": bemasterdb})
+    master_host, master_port = setmaster["host"], setmaster["port"]
+    slaves.remove(setmaster)
+    for slave in slaves:
+        changeinfo = {
+            "slavedb": do(connect, slave, 3),
+            "master_host"   : master_host,
+            "master_port"   : master_port,
+            "master_logpos" : master_logpos,
+            "master_logfile": master_logfile,
+        }
+        do(slave_change_master, changeinfo)
 
 def connect(host, user, passwd, port):
     try:
@@ -136,16 +162,19 @@ def connect(host, user, passwd, port):
 
 def slave_routine(slave):
     slavedb = do(connect, slave, 5)
-    do(iosql_thread, {"slavedb": slavedb})
+    if slavedb == False:
+        return
+    ret = do(iosql_thread, {"slavedb": slavedb})
+    if ret == False:
+        return
     do(repl_delay, {"slavedb": slavedb})
 
 def master_routine(master):
     db = do(connect, master, 5)
     if not db:
-        change_master([SLAVE])
+        change_master(SLAVES)
 
 if __name__ == "__main__":
-
     master_routine(MASTER)
     for slave in SLAVES:
         slave_routine(slave)
