@@ -29,6 +29,8 @@ MASTER = {
     "passwd":"2503",
 }
 
+dbconns = []
+
 def alert(msg, type):
     print msg
     log(msg)
@@ -158,6 +160,7 @@ def connect(host, user, passwd, port):
         db = MySQLdb.connect(host=host, user=user, passwd=passwd, port=port)
     except Exception, e:
         raise Exception(e.args[1])
+    dbconns.append(db)
     return db
 
 def slave_routine(slave):
@@ -169,6 +172,10 @@ def slave_routine(slave):
         return
     do(repl_delay, {"slavedb": slavedb})
 
+def cleardb():
+    while dbconns:
+        dbconns.pop().close()
+
 def master_routine(master):
     db = do(connect, master, 5)
     if not db:
@@ -178,3 +185,4 @@ if __name__ == "__main__":
     master_routine(MASTER)
     for slave in SLAVES:
         slave_routine(slave)
+    cleardb()
