@@ -7,42 +7,13 @@ import time
 import sys
 import pycurl
 import threading
+import ConfigParser
 from warnings import filterwarnings
 
-filterwarnings('ignore', category = MySQLdb.Warning)
-
-test_dbs = [
-    {
-        "slaves": [
-            {
-            "host":"115.28.6.205",
-            "port":3312,
-            "user":"test",
-            "passwd":"2503",
-            },
-            {
-            "host":"115.28.6.205",
-            "port":3313,
-            "user":"test",
-            "passwd":"2503",
-            },
-        ],
-        "master": {
-            "host":"115.28.6.205",
-            "port":3311,
-            "user":"test",
-            "passwd":"2503",
-        }
-    },
-    # add more
-]
-
-tglobal = threading.local()
 
 def alert(msg, type):
     print msg, type
     log(msg)
-
 
 class Single(threading.Thread):
 
@@ -100,6 +71,7 @@ def slave_become_master(slavedb):
     cursor.execute("stop slave;")
     cursor.execute("reset master;")
     cursor.execute("show master status;")
+    cursor.execute("set global read-only=0;")
     ret = cursor.fetchall()[0]
     master_logfile = ret["File"]
     master_logpos = ret["Position"]
@@ -216,7 +188,62 @@ def suit_routine():
     for slave in tglobal.suit["slaves"]:
         slave_routine(slave)
 
+def fork_(pid = False):
+    pid = os.fork()
+    if pid > 0: 
+        if pid:
+            file_put_content(pidfile, str(pid), FILE_OVERWRITE)
+        sys.exit(0)
+
+    if pid < 0:
+        error_log("fork child process failed!")
+        sys.exit(1)
+
 if __name__ == "__main__":
-    for suit in test_dbs:
-        thread = Single(suit_routine, suit)
-        thread.start()
+
+    if len(sys.argv) != 2:
+        print "usage: mysqlmond [configfile]"
+        sys.exit(1)
+
+    if not os.path.isfile(sys.argv[1]):
+        print "not a valid config file"
+        sys.exit(1)
+
+    config = ConfigParser.ConfigParser()
+    config.read(sys.argv[1])
+
+    pidfile     = config.get("log", "pid_file")
+    log         = config.get("log", "log_file")
+
+    frequency   = config.get("monitor", "frequency")
+    hookmodule  = config.get("monitor", "hook_module")
+    repluser    = config.get("monitor", "repl_user")
+    replpass    = config.get("monitor", "repl_pass")
+    conrepeat   = config.get("monitor", "con_repeat")
+    conrepeat   = config.get("monitor", "con_repeat_span")
+    relrepeat   = config.get("monitor", "rel_repeat")
+    repeatspan  = config.get("monitor", "rel_repeat_span")
+    autochange  = config.get("monitor", "auto_change")
+    
+    
+    hookmodule = __import__(hookmodule)
+    if not getattr(hookmodule, "get_suit", None):
+        print "There is no get_suit function in hook module"
+        sys.exit(1)
+    # print getattr(hookmodule, "get_suit", None)
+    # exit(0)
+
+    #fork_()
+    #os.setsid()
+    #fork_(True)
+    
+    filterwarnings('ignore', category = MySQLdb.Warning)
+    tglobal = threading.local()
+
+    while True:
+        time.sleep(frequency)
+        suits = hookmodule.get_suit()
+        for suit in suits:
+            thread = Single(suit_routine, suit)
+            thread.start()
+
