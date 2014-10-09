@@ -43,3 +43,46 @@ def get_suit():
     ]
     """
     pass
+
+def before_monitor_started():
+    """
+    before every things is started
+    """
+    pass
+
+def slave_connect_error(slaveinfo):
+    """
+    after any slave connect failed
+    """
+    pass
+    
+def slave_delay(slaveinfo):
+    """
+    after any slave delay
+    """
+    pass
+
+def slave_thread_error(slaveinfo):
+    """
+    after any slave io or sql thread is not Yes
+    """
+    pass
+
+def master_connect_error(masterinfo):
+    """
+    after master connect failed
+    before change master
+    """
+    pass
+
+def after_thread_ended(suit):
+    """
+    after one suit monitor is ended
+    """
+    pass
+
+def after_monitor_ended(suits):
+    """
+    after all monitor thread ended
+    """
+    pass
