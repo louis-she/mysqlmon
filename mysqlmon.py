@@ -43,14 +43,19 @@ def do(func, params, repeat_times=0, doalert=True, span=1):
         else:
             level = 1
         if doalert:
-            call_hook_func("alert", {"error": error, "level": level})
+            call_hook_func("alert", {"msg": error, "level": level})
         return False
     return ret
 
-def call_hook_func(func, param):
-    func = getattr(hookmodule, func, None)
-    if not func:
-        return func(**param)
+def call_hook_func(funcname, param):
+    func = getattr(hookmodule, funcname, None)
+    if func:
+        try:
+            ret = func(**param)
+        except Exception, e:
+            print funcname
+            log("call hook function {funcname} failed: {error}"
+            .format(funcname=funcname, error=str(e)))
     else:
         return False
 
@@ -121,7 +126,7 @@ def same_logfile(slavedb):
 
 def log(msg):
     nowtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-    fh = open("./logfile", "a")
+    fh = open(logfile, "a")
     fh.write("[%s] %s\n" % (nowtime, msg))
 
 def change_master(slaves):
@@ -200,7 +205,7 @@ def slave_routine(slave):
 def master_routine(master):
     db = do(connect, master, conrepeat, True, conrespan)
     if not db and autochange:
-        call_hook_func("master_connect_error", {"masterinfo", master})
+        call_hook_func("master_connect_error", {"masterinfo": master})
         do(change_master, {"slaves": tglobal.suit["slaves"]})
         
 
@@ -236,7 +241,7 @@ if __name__ == "__main__":
     config.read(sys.argv[1])
 
     pidfile     = config.get("log", "pid_file")
-    log         = config.get("log", "log_file")
+    logfile     = config.get("log", "log_file")
 
     frequency   = config.getfloat("monitor", "frequency")
     hookmodule  = config.get("monitor", "hook_module")
@@ -263,6 +268,7 @@ if __name__ == "__main__":
 
     while True:
         time.sleep(frequency)
+        call_hook_func("before_monitor_started", {})
         suits = hookmodule.get_suit()
         for suit in suits:
             thread = Single(suit_routine, suit)
