@@ -11,7 +11,6 @@ def alert(msg, level):
     pass
 
 def get_suit():
-    print "hahaha"
     """
     get the monitor suit
     @return list as

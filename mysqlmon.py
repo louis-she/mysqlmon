@@ -10,11 +10,6 @@ import threading
 import ConfigParser
 from warnings import filterwarnings
 
-
-def alert(msg, type):
-    print msg, type
-    log(msg)
-
 class Single(threading.Thread):
 
     def __init__(self, routine, suit = {}, globalvars = {}):
@@ -27,8 +22,8 @@ class Single(threading.Thread):
         tglobal.suit = self._suit
         self._routine()
 
-def do(func, params, repeat_times = 0, doalert=True):
-    time.sleep(0.5)
+def do(func, params, repeat_times=0, doalert=True, span=1):
+    time.sleep(span)
     repeat_times += 1
     error = ""
     ret = ""
@@ -43,16 +38,13 @@ def do(func, params, repeat_times = 0, doalert=True):
 
     if error != "": 
         if repeat_times != 0:
-            type = "mail"
+            level = 2
         else:
-            type = "sms"
-        if doalert: 
-            alert(error, type)
+            level = 1
+        if doalert and getattr(hookmodule, "alert", None): 
+            hookmodule.alert(error, level)
         return False
     return ret
-
-def check_process():
-    pass
 
 def slave_change_master(slavedb, master_host, master_port, 
                 master_logfile, master_logpos, master_user, master_password):
@@ -122,15 +114,15 @@ def change_master(slaves):
 
     for slave in slaves:
         # 1. connect to any slaves that belongs to the master
-        slavedb = do(connect, slave, 3, False)
+        slavedb = do(connect, slave, conrepeat, False, conrespan)
         if slavedb == False:
             continue
         # 2. check if it is the same logfile
-        logfile = do(same_logfile, {"slavedb": slavedb}, 3, False)
+        logfile = do(same_logfile, {"slavedb": slavedb}, replrepeat, False, replrespan)
         if logfile == False:
             continue
         # 3. check if it is relay, give it 5 chances to be synced
-        logpos  = do(repl_delay, {"slavedb": slavedb}, 5, False)
+        logpos  = do(repl_delay, {"slavedb": slavedb}, replrepeat, False, replrespan)
         if logpos == False:
             continue
 
@@ -138,18 +130,19 @@ def change_master(slaves):
             setmaster = slave
             curpos = logpos
     if not setmaster:
-        # raise Exception("None of the slaves can be raised as master") # disaster, no need to alert any more
+        # disaster, no need to alert any more
+        # raise Exception("None of the slaves can be raised as master") 
         return False
-    bemasterdb = do(connect, setmaster, 3)
+    bemasterdb = do(connect, setmaster, conrepeat, True, conrespan)
     master_logfile, master_logpos = do(slave_become_master, {"slavedb": bemasterdb})
     master_host, master_port = setmaster["host"], setmaster["port"]
     slaves.remove(setmaster)
     for slave in slaves:
         changeinfo = {
-            "slavedb"        : do(connect, slave, 3),
+            "slavedb"        : do(connect, slave, conrepeat, True, conrespan),
             "master_host"    : master_host,
-            "master_password": "repl",
-            "master_user"    : "repl",
+            "master_password": repluser,
+            "master_user"    : replpass,
             "master_port"    : master_port,
             "master_logpos"  : master_logpos,
             "master_logfile" : master_logfile,
@@ -170,7 +163,7 @@ def cleardb():
         tglobal.dbconns.pop().close()
 
 def slave_routine(slave):
-    slavedb = do(connect, slave, 5)
+    slavedb = do(connect, slave, conrepeat, True, conrespan)
     if slavedb == False:
         return
     ret = do(iosql_thread, {"slavedb": slavedb, "host": slave["host"], "port": slave["port"]})
@@ -179,8 +172,8 @@ def slave_routine(slave):
     do(repl_delay, {"slavedb": slavedb, "host": slave["host"], "port": slave["port"]})
 
 def master_routine(master):
-    db = do(connect, master, 5)
-    if not db:
+    db = do(connect, master, conrepeat, True, conrespan)
+    if not db and autochange:
         do(change_master, {"slaves": tglobal.suit["slaves"]})
 
 def suit_routine():
@@ -215,35 +208,35 @@ if __name__ == "__main__":
     pidfile     = config.get("log", "pid_file")
     log         = config.get("log", "log_file")
 
-    frequency   = config.get("monitor", "frequency")
+    frequency   = config.getfloat("monitor", "frequency")
     hookmodule  = config.get("monitor", "hook_module")
     repluser    = config.get("monitor", "repl_user")
     replpass    = config.get("monitor", "repl_pass")
-    conrepeat   = config.get("monitor", "con_repeat")
-    conrepeat   = config.get("monitor", "con_repeat_span")
-    relrepeat   = config.get("monitor", "rel_repeat")
-    repeatspan  = config.get("monitor", "rel_repeat_span")
-    autochange  = config.get("monitor", "auto_change")
-    
+    conrepeat   = config.getint("monitor", "con_repeat")
+    conrespan   = config.getfloat("monitor", "con_repeat_span")
+    replrepeat  = config.getint("monitor", "rel_repeat")
+    replrespan  = config.getfloat("monitor", "rel_repeat_span")
+    autochange  = config.getint("monitor", "auto_change")
     
     hookmodule = __import__(hookmodule)
     if not getattr(hookmodule, "get_suit", None):
         print "There is no get_suit function in hook module"
         sys.exit(1)
-    # print getattr(hookmodule, "get_suit", None)
-    # exit(0)
 
-    #fork_()
-    #os.setsid()
-    #fork_(True)
-    
+    fork_()
+    os.setsid()
+    fork_(True)
+
     filterwarnings('ignore', category = MySQLdb.Warning)
     tglobal = threading.local()
+    thread_list = []
 
     while True:
         time.sleep(frequency)
         suits = hookmodule.get_suit()
         for suit in suits:
             thread = Single(suit_routine, suit)
+            thread_list.append(thread)
             thread.start()
-
+        for thread in thread_list:
+            thread.join()
