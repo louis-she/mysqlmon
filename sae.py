@@ -8,8 +8,9 @@ def alert(msg, level):
     @param grade int error level 1: fatal 2: warning
     @return null
     """
-    print msg, level
-    pass
+    fh = open("alert.log", "a")
+    fh.write(msg + str(level) + "\n")
+    fh.close()
 
 def get_suit():
     """
@@ -72,45 +73,57 @@ def get_suit():
     ]
     return ret
 
+def _wt(content):
+    fh = open("test_hook", "a")
+    fh.write(content + "\n")
+    fh.write("===================================\n")
+    fh.close()
+
 def before_monitor_started():
     """
     before every things is started
     """
-    pass
+    _wt("***before_monitor_started***")
 
 def slave_connect_error(slaveinfo):
     """
     after any slave connect failed
     """
-    pass
+    _wt("***slave_connect_error***")
+    _wt(str(slaveinfo))
     
 def slave_delay(slaveinfo):
     """
     after any slave delay
     """
-    pass
+    _wt("***slave_delay***")
+    _wt(str(slaveinfo))
 
 def slave_thread_error(slaveinfo):
     """
     after any slave io or sql thread is not Yes
     """
-    pass
+    _wt("***slave_thread_error***")
+    _wt(str(slaveinfo))
 
 def master_connect_error(masterinfo):
     """
     after master connect failed
     before change master
     """
-    pass
+    _wt("***master_connect_error***")
+    _wt(str(masterinfo))
 
 def after_thread_ended(suit):
     """
     after one suit monitor is ended
     """
-    pass
+    _wt("***after_thread_ended***")
+    _wt(str(suit))
 
 def after_monitor_ended(suits):
     """
     after all monitor thread ended
     """
-    pass
+    _wt("***after_monitor_ended***")
+    _wt(str(suits))
