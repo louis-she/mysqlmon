@@ -63,10 +63,10 @@ def get_suit():
                 # add more ...
             ],
             "master": {
-                "host":"127.0.0.1",
+                "host":"115.28.6.205",
                 "port":3311,
                 "user":"test",
-                "passwd":"123",
+                "passwd":"2503",
             }
         },
         # add more ...

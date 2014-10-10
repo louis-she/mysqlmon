@@ -76,7 +76,7 @@ def slave_become_master(slavedb):
     cursor.execute("stop slave;")
     cursor.execute("reset master;")
     cursor.execute("show master status;")
-    cursor.execute("set global read-only=0;")
+    cursor.execute("set global read_only=0;")
     ret = cursor.fetchall()[0]
     master_logfile = ret["File"]
     master_logpos = ret["Position"]
