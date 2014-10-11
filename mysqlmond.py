@@ -257,7 +257,7 @@ if __name__ == "__main__":
     if not getattr(hookmodule, "get_suit", None):
         print "There is no get_suit function in hook module"
         sys.exit(1)
-
+ 
     fork_()
     os.setsid()
     fork_(True)
