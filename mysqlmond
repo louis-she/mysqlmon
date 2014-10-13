@@ -32,6 +32,7 @@ class Heartbeat(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
+        global hb_master_status
         if hb_role == "master":
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -39,26 +40,34 @@ class Heartbeat(threading.Thread):
             s.listen(1)
             while True:
                 connection, address = s.accept()
-                if address != hb_slave_ip:
+                if address[0] != hb_slave_ip:
                     connection.close()
+                    log("received hb package from none slave ip {ip}"
+                        .format(ip=address[0]))
                     continue
                 recv = connection.recv(1024)
-                if recv != md5("mysqlmonheartbeatslave"):
+                if recv != md5("mysqlmonheartbeatslave").hexdigest():
                     connection.close()
+                    log("received unvalid hb package from slave")
                     continue
-                connection.send(md5("mysqlmonheartbeatmaster"))
+                connection.send(md5("mysqlmonheartbeatmaster").hexdigest())
                 connection.close()
         else:
             while True:
-                time.sleep(30)
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect((hb_master_addr, hb_master_port))
-                s.send(md5("mysqlmonheartbeatslave"))
-                rec = s.recv(1024)
-                if rec == md5("mysqlmonheartbeatmaster"):
-                    hb_master_status = "good"
+                time.sleep(3)
+                recv = ""
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.connect((hb_addr, hb_port))
+                    s.send(md5("mysqlmonheartbeatslave").hexdigest())
+                    recv = s.recv(1024)
+                except Exception, e:
+                    log("Master connect failed: {err}".format(err=e.args[1]))
+                    hb_master_status = False
+                if recv == md5("mysqlmonheartbeatmaster").hexdigest():
+                    hb_master_status = True
                 else:
-                    hb_master_status = "bad"
+                    hb_master_status = False
                 s.close()
 
 def do(func, params, repeat_times=0, doalert=True, span=1):
@@ -307,16 +316,18 @@ if __name__ == "__main__":
     fd = open(pidfile, "w")
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
+    hb_master_status = True
+
     filterwarnings('ignore', category = MySQLdb.Warning)
     tglobal = threading.local()
     thread_list = []
 
     hb = Heartbeat()
-    hb.run()
+    hb.start()
 
     while True:
         time.sleep(frequency)
-        if hb_master_status == "ok" and hb_role == "slave":
+        if hb_master_status and hb_role == "slave":
             continue
         call_hook_func("before_monitor_started", {})
         suits = hookmodule.get_suit()
