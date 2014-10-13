@@ -9,6 +9,7 @@ import sys
 import pycurl
 import threading
 import ConfigParser
+import fcntl
 from warnings import filterwarnings
 
 class Single(threading.Thread):
@@ -215,16 +216,15 @@ def suit_routine():
     for slave in tglobal.suit["slaves"]:
         slave_routine(slave)
 
-def fork_(pid = False):
+def fork_(wpid = False):
+
     pid = os.fork()
     if pid > 0: 
-        if pid:
+        if wpid:
             fh = open(pidfile, "w")
             fh.write(str(pid))
-            fh.close()
         sys.exit(0)
-
-    if pid < 0:
+    elif pid < 0:
         error_log("fork child process failed!")
         sys.exit(1)
 
@@ -262,6 +262,9 @@ if __name__ == "__main__":
     fork_()
     os.setsid()
     fork_(True)
+
+    fd = open(pidfile, "w")
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     filterwarnings('ignore', category = MySQLdb.Warning)
     tglobal = threading.local()
