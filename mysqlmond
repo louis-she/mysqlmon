@@ -219,7 +219,7 @@ def change_master(slaves):
         }
         do(slave_change_master, changeinfo, 0, False)
 
-def connect(host, user, passwd, port):
+def connect(host, user, passwd='', port='', **kargs):
     try:
         db = MySQLdb.connect(host=host, user=user, passwd=passwd, 
             port=port, connect_timeout=1)
@@ -234,6 +234,10 @@ def cleardb():
         tglobal.dbconns.pop().close()
 
 def slave_routine(slave):
+    if "user" not in slave:
+        slave["user"] = monuser
+    if "passwd" not in slave:
+        slave["passwd"] = monpass
     slavedb = do(connect, slave, conrepeat, True, conrespan)
     if slavedb == False:
         call_hook_func("slave_connect_error", {"slaveinfo": slave})
@@ -250,6 +254,10 @@ def slave_routine(slave):
         return
 
 def master_routine(master):
+    if "user" not in master:
+        master["user"] = monuser
+    if "passwd" not in master:
+        master["passwd"] = monpass
     db = do(connect, master, conrepeat, True, conrespan)
     if not db and autochange:
         call_hook_func("master_connect_error", {"masterinfo": master})
@@ -293,6 +301,8 @@ if __name__ == "__main__":
     hookmodule  = config.get("monitor", "hook_module")
     repluser    = config.get("monitor", "repl_user")
     replpass    = config.get("monitor", "repl_pass")
+    monuser     = config.get("monitor", "mon_user")
+    monpass     = config.get("monitor", "mon_pass")
     conrepeat   = config.getint("monitor", "con_repeat")
     conrespan   = config.getfloat("monitor", "con_repeat_span")
     replrepeat  = config.getint("monitor", "rel_repeat")

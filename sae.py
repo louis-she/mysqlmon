@@ -44,33 +44,35 @@ def get_suit():
         # add more ...
     ]
     """
-    ret = [
-        {
-            "slaves": [
-                #slave should be at leat 2 instance
-                {
-                "host":"127.0.0.1",
-                "port":3312,
-                "user":"test",
-                "passwd":"123",
-                },
-                {
-                "host":"127.0.0.1",
-                "port":3313,
-                "user":"test",
-                "passwd":"123",
-                },
-                # add more ...
-            ],
-            "master": {
-                "host":"115.28.6.205",
-                "port":3311,
-                "user":"test",
-                "passwd":"2503",
+    try:
+        db = MySQLdb.connect("kindlergarden.com", user="rdstest", 
+            passwd="restest", port=3306, connect_timeout=1,
+            db="rdstest")
+    except Exception, e:
+        raise Exception("get source failed: {err}"\
+        .format(err=e.args[1]))
+    cursor = db.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("select * from instance2node order by appname");
+    data = cursor.fetchall()
+    ret = []
+    buffer = {
+    "master": {},
+    "slaves": [],
+    }
+    for i in range(0, len(data)):
+        if data[i]["role"] == "master":
+            buffer["master"] = data[i]
+            buffer["master"]["host"] = data[i]["ip"]
+        if data[i]["role"] == "slave":
+            sbuffer = data[i]
+            sbuffer["host"] = data[i]["ip"]
+            buffer["slaves"].append(sbuffer)
+        if i+1 == len(data) or data[i]["appname"] != data[i+1]["appname"]:
+            ret.append(buffer)
+            buffer = {
+                "master": {},
+                "slaves": [],
             }
-        },
-        # add more ...
-    ]
     return ret
 
 def _wt(content):
@@ -127,3 +129,6 @@ def after_monitor_ended(suits):
     """
     _wt("***after_monitor_ended***")
     _wt(str(suits))
+
+if __name__ == "__main__":
+    get_suit();
