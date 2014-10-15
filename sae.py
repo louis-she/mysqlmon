@@ -76,7 +76,7 @@ def get_suit():
     return ret
 
 def _wt(content):
-    fh = open("test_hook", "a")
+    fh = open("./logs/test_hook", "a")
     fh.write(content + "\n")
     fh.write("===================================\n")
     fh.close()
