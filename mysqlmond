@@ -219,9 +219,13 @@ def master_routine(master):
         
 
 def suit_routine():
+    global queue_pool
     master_routine(tglobal.suit["master"])
     for slave in tglobal.suit["slaves"]:
         slave_routine(slave)
+    lock.acquire()
+    queue_pool -= 1
+    lock.release()
 
 def fork_(wpid = False):
 
@@ -275,25 +279,25 @@ if __name__ == "__main__":
     fd = open(pidfile, "w")
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-    hb_master_status = True
-
     filterwarnings('ignore', category = MySQLdb.Warning)
     tglobal = threading.local()
     thread_list = []
 
-    hb = Heartbeat()
-    hb.start()
-    queue_pool = []
+    lock = threading.RLock() 
+    queue_pool = 0
 
     while True:
         time.sleep(frequency)
-        if hb_master_status and hb_role == "slave":
-            continue
         call_hook_func("before_monitor_started", {})
         suits = hookmodule.get_suit()
         for suit in suits:
-        # finished the pool!!! #
-        while len(queue_pool) != 20:
+            while True:
+                time.sleep(0.1)
+                if queue_pool == 2:
+                    continue
+                else:
+                    break
+            queue_pool += 1
             thread = Single(suit_routine, suit)
             thread_list.append(thread)
             thread.start()

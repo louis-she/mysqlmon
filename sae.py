@@ -44,6 +44,130 @@ def get_suit():
         # add more ...
     ]
     """
+    return [
+        {
+            "slaves": [
+                #slave should be at leat 2 instance
+                {
+                "host":"127.0.0.1",
+                "port":3312,
+                "user":"test",
+                "passwd":"123",
+                },
+                {
+                "host":"127.0.0.1",
+                "port":3313,
+                "user":"test",
+                "passwd":"123",
+                },
+                # add more ...
+            ],
+            "master": {
+                "host":"127.0.0.1",
+                "port":3311,
+                "user":"test",
+                "passwd":"123",
+            }
+        },
+        # add more ...
+        {
+            "slaves": [
+                #slave should be at leat 2 instance
+                {
+                "host":"127.0.0.1",
+                "port":3312,
+                "user":"test",
+                "passwd":"123",
+                },
+                {
+                "host":"127.0.0.1",
+                "port":3313,
+                "user":"test",
+                "passwd":"123",
+                },
+                # add more ...
+            ],
+            "master": {
+                "host":"127.0.0.1",
+                "port":3311,
+                "user":"test",
+                "passwd":"123",
+            }
+        },
+        {
+            "slaves": [
+                #slave should be at leat 2 instance
+                {
+                "host":"127.0.0.1",
+                "port":3312,
+                "user":"test",
+                "passwd":"123",
+                },
+                {
+                "host":"127.0.0.1",
+                "port":3313,
+                "user":"test",
+                "passwd":"123",
+                },
+                # add more ...
+            ],
+            "master": {
+                "host":"127.0.0.1",
+                "port":3311,
+                "user":"test",
+                "passwd":"123",
+            }
+        },
+        {
+            "slaves": [
+                #slave should be at leat 2 instance
+                {
+                "host":"127.0.0.1",
+                "port":3312,
+                "user":"test",
+                "passwd":"123",
+                },
+                {
+                "host":"127.0.0.1",
+                "port":3313,
+                "user":"test",
+                "passwd":"123",
+                },
+                # add more ...
+            ],
+            "master": {
+                "host":"127.0.0.1",
+                "port":3311,
+                "user":"test",
+                "passwd":"123",
+            }
+        },
+        {
+            "slaves": [
+                #slave should be at leat 2 instance
+                {
+                "host":"127.0.0.1",
+                "port":3312,
+                "user":"test",
+                "passwd":"123",
+                },
+                {
+                "host":"127.0.0.1",
+                "port":3313,
+                "user":"test",
+                "passwd":"123",
+                },
+                # add more ...
+            ],
+            "master": {
+                "host":"127.0.0.1",
+                "port":3311,
+                "user":"test",
+                "passwd":"123",
+            }
+        },
+    ]
+    """
     try:
         db = MySQLdb.connect("kindlergarden.com", user="rdstest", 
             passwd="restest", port=3306, connect_timeout=1,
@@ -74,6 +198,7 @@ def get_suit():
                 "slaves": [],
             }
     return ret
+    """
 
 def _wt(content):
     fh = open("./logs/test_hook", "a")
