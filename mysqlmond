@@ -266,6 +266,7 @@ if __name__ == "__main__":
     replrepeat  = config.getint("monitor", "rel_repeat")
     replrespan  = config.getfloat("monitor", "rel_repeat_span")
     autochange  = config.getint("monitor", "auto_change")
+    mthreadnum  = config.getint("monitor", "max_thread_num")
 
     hookmodule = __import__(mhookmodule)
     if config.has_section(mhookmodule):
@@ -297,7 +298,7 @@ if __name__ == "__main__":
         for suit in suits:
             while True:
                 time.sleep(0.1)
-                if queue_pool == 2:
+                if queue_pool == mthreadnum:
                     continue
                 else:
                     break
