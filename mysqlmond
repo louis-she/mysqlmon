@@ -256,7 +256,7 @@ if __name__ == "__main__":
     logfile     = config.get("log", "log_file")
 
     frequency   = config.getfloat("monitor", "frequency")
-    hookmodule  = config.get("monitor", "hook_module")
+    mhookmodule = config.get("monitor", "hook_module")
     repluser    = config.get("monitor", "repl_user")
     replpass    = config.get("monitor", "repl_pass")
     monuser     = config.get("monitor", "mon_user")
@@ -267,7 +267,11 @@ if __name__ == "__main__":
     replrespan  = config.getfloat("monitor", "rel_repeat_span")
     autochange  = config.getint("monitor", "auto_change")
 
-    hookmodule = __import__(hookmodule)
+    hookmodule = __import__(mhookmodule)
+    if config.has_section(mhookmodule):
+        for item in config.items(mhookmodule):
+            setattr(hookmodule, item[0], item[1])
+
     if not getattr(hookmodule, "get_suit", None):
         print "There is no get_suit function in hook module"
         sys.exit(1)

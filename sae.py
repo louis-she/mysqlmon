@@ -44,6 +44,7 @@ def get_suit():
         # add more ...
     ]
     """
+    """
     return [
         {
             "slaves": [
@@ -169,12 +170,13 @@ def get_suit():
     ]
     """
     try:
-        db = MySQLdb.connect("kindlergarden.com", user="rdstest", 
-            passwd="restest", port=3306, connect_timeout=1,
-            db="rdstest")
+        db = MySQLdb.connect(mysql_host, user=mysql_user, 
+            passwd=mysql_pass, port=int(mysql_port), connect_timeout=1,
+            db=dbname)
     except Exception, e:
+        print e.args
         raise Exception("get source failed: {err}"\
-        .format(err=e.args[1]))
+        .format(err=str(e)))
     cursor = db.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("select * from instance2node order by appname");
     data = cursor.fetchall()
@@ -198,7 +200,6 @@ def get_suit():
                 "slaves": [],
             }
     return ret
-    """
 
 def _wt(content):
     fh = open("./logs/test_hook", "a")
