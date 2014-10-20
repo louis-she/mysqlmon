@@ -13,15 +13,19 @@ from warnings import filterwarnings
 
 class Single(threading.Thread):
 
-    def __init__(self, routine, suit = {}):
+    def __init__(self, routine, suit, id):
         threading.Thread.__init__(self)
         self._routine = routine
         self._suit = suit
+        self._id = id
 
     def run(self):
         tglobal.dbconns = []
         tglobal.suit = self._suit
         self._routine()
+        lock.acquire()
+        queue_pool.remove(self._id)
+        lock.release()
         call_hook_func("after_thread_ended", {"suit": self._suit})
 
 def do(func, params, repeat_times=0, doalert=True, span=1):
@@ -223,9 +227,7 @@ def suit_routine():
     master_routine(tglobal.suit["master"])
     for slave in tglobal.suit["slaves"]:
         slave_routine(slave)
-    lock.acquire()
-    queue_pool -= 1
-    lock.release()
+    
 
 def fork_(wpid = False):
 
@@ -267,6 +269,7 @@ if __name__ == "__main__":
     replrespan  = config.getfloat("monitor", "rel_repeat_span")
     autochange  = config.getint("monitor", "auto_change")
     mthreadnum  = config.getint("monitor", "max_thread_num")
+    maxtid      = config.getint("monitor", "max_tid")
 
     hookmodule = __import__(mhookmodule)
     if config.has_section(mhookmodule):
@@ -289,7 +292,9 @@ if __name__ == "__main__":
     thread_list = []
 
     lock = threading.RLock() 
-    queue_pool = 0
+    queue_pool = []
+
+    tid = 0
 
     while True:
         time.sleep(frequency)
@@ -298,14 +303,17 @@ if __name__ == "__main__":
         for suit in suits:
             while True:
                 time.sleep(0.1)
-                if queue_pool == mthreadnum:
+                if len(queue_pool) == mthreadnum:
                     continue
                 else:
                     break
-            queue_pool += 1
-            thread = Single(suit_routine, suit)
+            tid += 1
+            tid = tid % maxtid
+            if tid in queue_pool:
+                continue
+            queue_pool.append(tid)
+            thread = Single(suit_routine, suit, tid)
             thread_list.append(thread)
             thread.start()
-        for thread in thread_list:
-            thread.join()
+
         call_hook_func("after_monitor_ended", {"suits": suits})
