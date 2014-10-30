@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import MySQLdb
+import lib
 
 def alert(msg, level):
     """
@@ -8,9 +9,7 @@ def alert(msg, level):
     @param grade int error level 1: fatal 2: warning
     @return null
     """
-    fh = open("alert.log", "a")
-    fh.write(msg + str(level) + "\n")
-    fh.close()
+    lib.log(msg, '/data0/logs/mysqlmond.pid')
 
 def get_suit():
     """

@@ -18,66 +18,138 @@ class Threadpool():
 
     _workthreads = []
     _lastEctime = []
+    _queue = []
 
     def __init__(self, poolsize, jobsize):
         self._poolsize = poolsize
-        self._queue = []
         self._workthreads = []
         self._jobsize = jobsize
 
     def addjob(self, jobfunc, param):
-        if len(self._queue) >= self._jobsize:
-            log('Task queue is full, drop current task')
+        if len(Threadpool._queue) >= self._jobsize:
+            lib.log('Task queue is full, drop current task', logfile)
             return
-        self._queue.append((jobfunc, param))
+        Threadpool._queue.append((jobfunc, param))
 
     def start(self):
         for i in range(self._poolsize):
-            wt = WorkThread(self._queue, i)
+            wt = WorkThread()
             Threadpool._workthreads.append(wt)
             wt.start()
 
-    @staticmethod
-    def receive(msg, tid):
-        if "action" not in msg or not hasattr(Threadpool, msg["action"]):
-            lib.log("Thread {tid} send unvalid msg".format(tid=tid), logfile)
-        action = msg["action"]
-        if "param" in msg:
-            param = msg["param"]
-        else:
-            param = {}
+        wtt = WorkThreadTest()
+        wtt.start()
+        Threadpool._workthreads.append(wtt)
 
-        return getattr(Threadpool, action)(**param)
+        mt = MonThread(mfrequence)
+        mt.start()
+
+
 
     @staticmethod
-    def setLastEctime(time, tid):
+    def callStaticFunc(func, param = {}):
+        if not hasattr(Threadpool, func):
+            lib.log("No such static func {func} in Threadpool".\
+            format(func=func), logfile)
+        return getattr(Threadpool, func)(**param)
+
+    @staticmethod
+    def getStatusTime():
+        result = []
         for thread in Threadpool._workthreads:
-            
-        return True
-
-    def getLastEctime():
-        if ""
+            tid = thread.gettid()
+            time = thread.getLastEctime()
+            status = thread.getStatus()
+            result.append((tid, time, status))
+        return result
 
 class MonThread(threading.Thread):
 
-    def __init__(self):
-        
-
-class WorkThread(threading.Thread):
-
-    def __init__(self, queue, id):
+    def __init__(self, frequence):
         threading.Thread.__init__(self)
-        self._queue = queue
-        self._id = id
+        self._frequence = frequence
+
+    def run(self):
+        while True:
+            time.sleep(self._frequence)
+            self.checkBlock()
+
+    def checkBlock(self):
+        sStatusTime = Threadpool.callStaticFunc("getStatusTime")
+        now = int(time.time())
+        results = []
+
+        for sst in sStatusTime:
+            tid, last, status = sst[0], sst[1], sst[2]
+            diff = now - last
+            if status == "running" and diff > timeout:
+                result = "{tid} thread may block ,running time {s}(s)"\
+                        .format(tid=tid, s=diff)
+                results.append(result)
+
+        if len(results) != 0:
+            lib.log(",".join(results), logfile)
+
+class WorkThreadTest(threading.Thread):
+
+    def __init__(self):
+        threading.Thread.__init__(self)
         self._timepos = int(time.time())
+        self._status = "init"
 
     def run(self):
         while True:
             try:
-                jobobj = self._queue.pop()
+                jobobj = Threadpool._queue.pop()
             except:
+                self._status = "sleep"
                 time.sleep(1)
                 continue
+
+            lib.log("test thread start!", logfile)
+            self._status = "running"
+            self.setEctime()
+
+            jobobj[0](**jobobj[1])
+            time.sleep(60)
+            self._timepos = int(time.time())
+
+    def gettid(self):
+        return self.ident
+
+    def setEctime(self):
+        self._timepos = int(time.time())
+
+    def getLastEctime(self):
+        return self._timepos
+
+    def getStatus(self):
+        return self._status
+
+    def sendMessage(self, msg):
+        Threadpool.receive(msg, self.gettid())
+
+    def exit(self):
+        self.exit()
+            
+class WorkThread(threading.Thread):
+
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self._timepos = int(time.time())
+        self._status = "init"
+
+    def run(self):
+        while True:
+            try:
+                jobobj = Threadpool._queue.pop()
+            except:
+                self._status = "sleep"
+                time.sleep(1)
+                continue
+
+            self._status = "running"
+            self.setEctime()
 
             jobobj[0](**jobobj[1])
             time.sleep(1)
@@ -86,8 +158,14 @@ class WorkThread(threading.Thread):
     def gettid(self):
         return self.ident
 
-    def getLastEctime(self, msg):
+    def setEctime(self):
+        self._timepos = int(time.time())
+
+    def getLastEctime(self):
         return self._timepos
+
+    def getStatus(self):
+        return self._status
 
     def sendMessage(self, msg):
         Threadpool.receive(msg, self.gettid())
@@ -287,8 +365,6 @@ def master_routine(master):
         do(change_master, {"slaves": tglobal.suit["slaves"]})
 
 def suit_routine(param):
-    lib.log(str(param), logfile)
-    return
     tglobal.suit = param
     master_routine(tglobal.suit["master"])
     for slave in tglobal.suit["slaves"]:
@@ -309,7 +385,7 @@ if __name__ == "__main__":
     pidfile     = config.get("log", "pid_file")
     logfile     = config.get("log", "log_file")
 
-    frequency   = config.getfloat("monitor", "frequency")
+    frequency   = config.getfloat("monitor", "frequence")
     mhookmodule = config.get("monitor", "hook_module")
     repluser    = config.get("monitor", "repl_user")
     replpass    = config.get("monitor", "repl_pass")
@@ -322,6 +398,8 @@ if __name__ == "__main__":
     autochange  = config.getint("monitor", "auto_change")
     mthreadnum  = config.getint("monitor", "max_thread_num")
     mtasknum    = config.getint("monitor", "max_task_num")
+    mfrequence  = config.getfloat("monitor", "mon_frequence")
+    timeout     = config.getfloat("monitor", "timeout")
 
     hookmodule = __import__(mhookmodule)
     if config.has_section(mhookmodule):
