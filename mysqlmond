@@ -9,24 +9,95 @@ import pycurl
 import threading
 import ConfigParser
 import fcntl
+import signal
+import lib
+import random
 from warnings import filterwarnings
 
-class Single(threading.Thread):
+class Threadpool():
 
-    def __init__(self, routine, suit, id):
+    _workthreads = []
+    _lastEctime = []
+
+    def __init__(self, poolsize, jobsize):
+        self._poolsize = poolsize
+        self._queue = []
+        self._workthreads = []
+        self._jobsize = jobsize
+
+    def addjob(self, jobfunc, param):
+        if len(self._queue) >= self._jobsize:
+            log('Task queue is full, drop current task')
+            return
+        self._queue.append((jobfunc, param))
+
+    def start(self):
+        for i in range(self._poolsize):
+            wt = WorkThread(self._queue, i)
+            Threadpool._workthreads.append(wt)
+            wt.start()
+
+    @staticmethod
+    def receive(msg, tid):
+        if "action" not in msg or not hasattr(Threadpool, msg["action"]):
+            lib.log("Thread {tid} send unvalid msg".format(tid=tid), logfile)
+        action = msg["action"]
+        if "param" in msg:
+            param = msg["param"]
+        else:
+            param = {}
+
+        return getattr(Threadpool, action)(**param)
+
+    @staticmethod
+    def setLastEctime(time, tid):
+        for thread in Threadpool._workthreads:
+            
+        return True
+
+    def getLastEctime():
+        if ""
+
+class MonThread(threading.Thread):
+
+    def __init__(self):
+        
+
+class WorkThread(threading.Thread):
+
+    def __init__(self, queue, id):
         threading.Thread.__init__(self)
-        self._routine = routine
-        self._suit = suit
+        self._queue = queue
         self._id = id
+        self._timepos = int(time.time())
 
     def run(self):
-        tglobal.dbconns = []
-        tglobal.suit = self._suit
-        self._routine()
-        lock.acquire()
-        queue_pool.remove(self._id)
-        lock.release()
-        call_hook_func("after_thread_ended", {"suit": self._suit})
+        while True:
+            try:
+                jobobj = self._queue.pop()
+            except:
+                time.sleep(1)
+                continue
+
+            jobobj[0](**jobobj[1])
+            time.sleep(1)
+            self._timepos = int(time.time())
+
+    def gettid(self):
+        return self.ident
+
+    def getLastEctime(self, msg):
+        return self._timepos
+
+    def sendMessage(self, msg):
+        Threadpool.receive(msg, self.gettid())
+
+    def exit(self):
+        self.exit()
+
+def h_sigterm(signum, frame):
+    global quit
+    quit = True
 
 def do(func, params, repeat_times=0, doalert=True, span=1):
     time.sleep(span)
@@ -58,9 +129,8 @@ def call_hook_func(funcname, param):
         try:
             ret = func(**param)
         except Exception, e:
-            print funcname
-            log("call hook function {funcname} failed: {error}"
-            .format(funcname=funcname, error=str(e)))
+            lib.log("call hook function {funcname} failed: {error}"
+            .format(funcname=funcname, error=str(e)), logfile)
     else:
         return False
 
@@ -128,11 +198,6 @@ def same_logfile(slavedb):
     if master_log_file != relay_master_log_file:
         raise Exception("replay_master_log_file is not the same as master_log_file")
     return master_log_file
-
-def log(msg):
-    nowtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-    fh = open(logfile, "a")
-    fh.write("[%s] %s\n" % (nowtime, msg))
 
 def change_master(slaves):
     setmaster = False
@@ -220,29 +285,16 @@ def master_routine(master):
     if not db and autochange:
         call_hook_func("master_connect_error", {"masterinfo": master})
         do(change_master, {"slaves": tglobal.suit["slaves"]})
-        
 
-def suit_routine():
-    global queue_pool
+def suit_routine(param):
+    lib.log(str(param), logfile)
+    return
+    tglobal.suit = param
     master_routine(tglobal.suit["master"])
     for slave in tglobal.suit["slaves"]:
         slave_routine(slave)
-    
-
-def fork_(wpid = False):
-
-    pid = os.fork()
-    if pid > 0: 
-        if wpid:
-            fh = open(pidfile, "w")
-            fh.write(str(pid))
-        sys.exit(0)
-    elif pid < 0:
-        error_log("fork child process failed!")
-        sys.exit(1)
 
 if __name__ == "__main__":
-
     if len(sys.argv) != 2:
         print "usage: mysqlmond [configfile]"
         sys.exit(1)
@@ -269,7 +321,7 @@ if __name__ == "__main__":
     replrespan  = config.getfloat("monitor", "rel_repeat_span")
     autochange  = config.getint("monitor", "auto_change")
     mthreadnum  = config.getint("monitor", "max_thread_num")
-    maxtid      = config.getint("monitor", "max_tid")
+    mtasknum    = config.getint("monitor", "max_task_num")
 
     hookmodule = __import__(mhookmodule)
     if config.has_section(mhookmodule):
@@ -279,10 +331,12 @@ if __name__ == "__main__":
     if not getattr(hookmodule, "get_suit", None):
         print "There is no get_suit function in hook module"
         sys.exit(1)
+
+    quit = False
  
-    fork_()
+    lib.fork_()
     os.setsid()
-    fork_(True)
+    lib.fork_(pidfile)
 
     fd = open(pidfile, "w")
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -296,24 +350,18 @@ if __name__ == "__main__":
 
     tid = 0
 
+    signal.signal(signal.SIGTERM, h_sigterm)
+
+    tp = Threadpool(mthreadnum, mtasknum)
+    tp.start()
+
     while True:
         time.sleep(frequency)
+        if quit:
+            lib.log("receiving kill signal, quit", logfile)
+            exit(0)
         call_hook_func("before_monitor_started", {})
         suits = hookmodule.get_suit()
         for suit in suits:
-            while True:
-                time.sleep(0.1)
-                if len(queue_pool) == mthreadnum:
-                    continue
-                else:
-                    break
-            tid += 1
-            tid = tid % maxtid
-            if tid in queue_pool:
-                continue
-            queue_pool.append(tid)
-            thread = Single(suit_routine, suit, tid)
-            thread_list.append(thread)
-            thread.start()
-
+            tp.addjob(suit_routine, {"param": suit})
         call_hook_func("after_monitor_ended", {"suits": suits})
